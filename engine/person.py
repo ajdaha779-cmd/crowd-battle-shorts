@@ -50,7 +50,7 @@ def pose_stand():
 
 def pose_run(ph):
     s = math.sin(ph * 2 * math.pi)
-    return dict(sh=(-40 * s, 40 * s), el=(85, 85), ab=(12, 12),
+    return dict(sh=(-38 * s, 38 * s), el=(62, 62), ab=(12, 12),
                 hip=(38 * s, -38 * s), kn=(20 + 45 * max(0, -s), 20 + 45 * max(0, s)),
                 lab=(3, 3), lean=12, twist=0)
 

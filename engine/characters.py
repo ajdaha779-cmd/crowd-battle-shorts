@@ -97,6 +97,11 @@ def human_info(mh, name):
         "eyes_material_type": "MAKESKIN",
         "clothes_material_type": "MAKESKIN",
     })
+    if mh.get("eye_color"):                 # процедурные глаза: радужка двумя оттенками
+        c = P.hex_rgb(mh["eye_color"])
+        hi["eyes_material_type"] = "PROCEDURAL_EYES"
+        hi["eyes_material_settings"] = {"IrisMajorColor": list(c),
+                                        "IrisMinorColor": [c[0] * 0.45, c[1] * 0.45, c[2] * 0.45, 1.0]}
     return hi
 
 
@@ -120,13 +125,84 @@ def tint(objs, color):
             mix.blend_type = "MULTIPLY"
             mix.inputs["Factor"].default_value = 1.0
             mix.inputs["B"].default_value = rgba
-            if base.is_linked:
+            if base.is_linked:               # текстура → яркость ×2 → × цвет: оттенок ложится ровно
                 src = base.links[0].from_socket
-                nt.links.new(src, mix.inputs["A"])
-                # светлая текстура × цвет: сначала обесцвечиваем, чтобы оттенок лёг ровно
+                bw = nt.nodes.new("ShaderNodeRGBToBW")
+                gain = nt.nodes.new("ShaderNodeMath")
+                gain.operation = "MULTIPLY"
+                gain.inputs[1].default_value = 2.0
+                nt.links.new(src, bw.inputs["Color"])
+                nt.links.new(bw.outputs["Val"], gain.inputs[0])
+                nt.links.new(gain.outputs["Value"], mix.inputs["A"])
             else:
                 mix.inputs["A"].default_value = base.default_value
             nt.links.new(mix.outputs["Result"], base)
+
+
+REGIONS = json.load(open(os.path.join(HERE, "regions.json")))
+SHELLS = {   # зона, толщина (м), непрозрачность, крупность «волоска»
+    "full": [("beard", 0.0055, 1.0), ("mustache", 0.004, 1.0)],
+    "short": [("beard", 0.0028, 0.9), ("mustache", 0.0025, 0.95)],
+    "stubble": [("stubble", 0.0009, 0.55)],
+    "mustache": [("mustache", 0.003, 1.0)],
+    "buzz": [("scalp", 0.0018, 0.85)],
+}
+
+
+def hair_material(name, color, alpha):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    b = nt.nodes["Principled BSDF"]
+    b.inputs["Base Color"].default_value = P.hex_rgb(color)
+    b.inputs["Roughness"].default_value = 0.75
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 900.0       # «волоски»
+    noise.inputs["Detail"].default_value = 2.0
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].position = 0.5 - 0.35 * alpha
+    ramp.color_ramp.elements[1].position = 0.55 - 0.3 * alpha
+    nt.links.new(tc.outputs["Object"], noise.inputs["Vector"])
+    nt.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+    mul = nt.nodes.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
+    mul.inputs[1].default_value = min(1.0, alpha + 0.1)
+    nt.links.new(ramp.outputs["Color"], mul.inputs[0])
+    nt.links.new(mul.outputs["Value"], b.inputs["Alpha"])
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = 0.4
+    nt.links.new(noise.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], b.inputs["Normal"])
+    return m
+
+
+def add_shell(base, region, thick, alpha, color, label):
+    """Копия базового меша (с ключами формы, весами и арматурой) только на зоне + сдвиг по нормали."""
+    import bmesh
+    keep = set(REGIONS[region])
+    o = base.copy()
+    o.data = base.data.copy()
+    o.name = f"{base.name}.{label}"
+    for c in base.users_collection:
+        c.objects.link(o)
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.index not in keep], context="VERTS")
+    bm.to_mesh(o.data)
+    bm.free()
+    for md in list(o.modifiers):
+        if md.type in ("MASK", "SUBSURF"):
+            o.modifiers.remove(md)
+    d = o.modifiers.new("shell", "DISPLACE")
+    d.direction = "NORMAL"
+    d.strength = thick
+    d.mid_level = 0.0
+    o.modifiers.move(o.modifiers.find("shell"), 0)     # сдвиг до арматуры — потом скелет гнёт вместе с лицом
+    o.data.materials.clear()
+    o.data.materials.append(hair_material(f"{o.name}.mat", color, alpha))
+    return o
 
 
 def build(mh, name):
@@ -141,6 +217,10 @@ def build(mh, name):
         tint([o for o in kids if "hair" in o.name.lower() or "eyebrow" in o.name.lower()], cols["hair"])
     for cname, c in (cols.get("clothes") or {}).items():
         tint([o for o in kids if cname.lower() in o.name.lower()], c)
+    for kind, col in ((mh.get("beard"), mh.get("beard_color", cols.get("hair", "#1A1410"))),
+                      ("buzz" if mh.get("buzz") else None, mh.get("buzz") or "#000")):
+        for region, thick, alpha in SHELLS.get(kind, []) if kind else []:
+            kids.append(add_shell(base, region, thick, alpha, col, f"{kind}_{region}"))
     return base, rig, kids
 
 
@@ -197,7 +277,7 @@ if cr:
     for i, pose in enumerate(P.crowd_poses()):
         coll.objects.link(bake(rig, kids, pose, f"{i}_pose", hz))
     delete(kids + [rig])
-    info["crowd_hip"] = hz
+    coll["crowd_hip"] = hz          # scene.py читает с коллекции (сцену не тащим — с ней приехала бы копия героя)
 
 he = spec["hero"].get("mh")
 if he:

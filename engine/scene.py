@@ -153,13 +153,9 @@ def build_world():
 def append_collection(name):
     with bpy.data.libraries.load(CHARS, link=False) as (src, dst):
         dst.collections = [name]
-        dst.scenes = [s for s in src.scenes][:1]
     coll = dst.collections[0]
     sc.collection.children.link(coll)
-    info = json.loads(dst.scenes[0].get("battle_info", "{}")) if dst.scenes else {}
-    if dst.scenes:
-        bpy.data.scenes.remove(dst.scenes[0])
-    return coll, info
+    return coll, {k: coll[k] for k in coll.keys()}
 
 
 def build_crowd(sim):
@@ -245,6 +241,10 @@ def update_hero(obj, sim):
         obj.rotation_euler = (0, 0, math.pi)
         obj.scale = (spec["hero"].get("scale", 1.0),) * 3
         RP.apply(obj, pose)
+        if os.environ.get("BATTLE_DEBUG"):
+            pb = obj.pose.bones["upperarm_r"]
+            print("HERO_DBG", obj.name, tuple(round(v, 2) for v in obj.location), round(obj.rotation_euler.z, 2),
+                  tuple(round(v, 2) for v in pb.rotation_quaternion), obj.data.pose_position)
         return
     old = obj.data
     obj.data = P.build_mesh("hero", spec["hero"]["person"], pose, HERO_MATS)
@@ -298,8 +298,8 @@ sim = S.Sim(spec)
 build_world()
 crowd = build_crowd(sim)
 if CHARS and spec["hero"].get("mh"):
-    append_collection("Hero")
-    hero = bpy.data.objects["HeroRig"]
+    hcoll, _ = append_collection("Hero")
+    hero = next(o for o in hcoll.all_objects if o.type == "ARMATURE")
 else:
     HERO_MATS = P.materials("hero", spec["hero"]["person"])
     hero = link(bpy.data.objects.new("Hero", bpy.data.meshes.new("hero0")))
