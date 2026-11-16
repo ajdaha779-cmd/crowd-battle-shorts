@@ -16,19 +16,70 @@ run-name: "${{ inputs.fight }}${{ inputs.preview && ' (черновик)' || '' 
 
 env:
   BLENDER_VER: "4.5.16"
+  MPFB_URL: "https://extensions.blender.org/download/sha256:c075b3e9b94b8e5556a5f03f4653602d02ea306de08126e8f55ed6dee28a2dad/add-on-mpfb-v2.0.18.zip"
+  MPFB_SHA: "c075b3e9b94b8e5556a5f03f4653602d02ea306de08126e8f55ed6dee28a2dad"
+  MH_ASSETS_URL: "https://files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip"
 
 jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.p.outputs.matrix }}
+      mh: ${{ steps.p.outputs.mh }}
     steps:
       - uses: actions/checkout@v4
       - id: p
         run: python3 tools/plan.py "fights/${{ inputs.fight }}.json" >> "$GITHUB_OUTPUT"
 
-  render:
+  # живые персонажи MakeHuman: MPFB ставится только здесь, на машине GitHub
+  characters:
     needs: plan
+    if: needs.plan.outputs.mh == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ~/blender
+          key: blender-${{ env.BLENDER_VER }}-linux-x64
+      - if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/blender
+          curl -sSL "https://download.blender.org/release/Blender${BLENDER_VER%.*}/blender-${BLENDER_VER}-linux-x64.tar.xz" \
+            | tar -xJ -C ~/blender --strip-components=1
+      - uses: actions/cache@v4
+        id: mh
+        with:
+          path: ~/mh
+          key: mh-mpfb-2.0.18-assets-cc0
+      - name: MPFB и ассеты MakeHuman (CC0)
+        if: steps.mh.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/mh
+          curl -sSL -o ~/mh/mpfb.zip "$MPFB_URL"
+          echo "$MPFB_SHA  $HOME/mh/mpfb.zip" | sha256sum -c -
+          curl -sSL -o ~/mh/assets.zip "$MH_ASSETS_URL"
+      - name: Библиотеки
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y --no-install-recommends libxi6 libxxf86vm1 libxfixes3 libxrender1 \
+            libxkbcommon0 libsm6 libice6 libgl1 libegl1 > /dev/null
+      - name: Сборка персонажей
+        run: |
+          ~/blender/blender -b --command extension install-file -r user_default -e ~/mh/mpfb.zip
+          ~/blender/blender -b -P engine/characters.py -- "fights/${{ inputs.fight }}.json" ~/mh/assets.zip characters.blend 2>&1 \
+            | grep -vE "^(Read|Info|Warning: .*node)" | tail -40
+          test -f characters.blend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: characters
+          path: characters.blend
+          retention-days: 1
+
+  render:
+    needs: [plan, characters]
+    if: always() && needs.plan.result == 'success' && needs.characters.result != 'failure' && needs.characters.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -55,10 +106,16 @@ jobs:
           sudo apt-get -qq update
           sudo apt-get -qq install -y --no-install-recommends libxi6 libxxf86vm1 libxfixes3 libxrender1 \
             libxkbcommon0 libsm6 libice6 libgl1 libegl1 > /dev/null
+      - if: needs.plan.outputs.mh == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: characters
+          path: chars
       - name: Рендер кадров ${{ matrix.a }}–${{ matrix.b }}
         run: |
+          CH=""; [ -f chars/characters.blend ] && CH="--chars=$PWD/chars/characters.blend"
           ~/blender/blender -b -P engine/scene.py -- "fights/${{ inputs.fight }}.json" ${{ matrix.a }} ${{ matrix.b }} frames \
-            ${{ inputs.preview && '--preview' || '' }} 2>&1 | grep -E "FRAME_DONE|CHUNK_DONE|Error|Traceback|File \"" || true
+            ${{ inputs.preview && '--preview' || '' }} $CH 2>&1 | grep -E "FRAME_DONE|CHUNK_DONE|Error|Traceback|File \"" || true
           n=$(ls frames/*.png 2>/dev/null | wc -l)
           echo "кадров: $n из $(( ${{ matrix.b }} - ${{ matrix.a }} + 1 ))"
           test "$n" -eq $(( ${{ matrix.b }} - ${{ matrix.a }} + 1 ))
@@ -71,6 +128,7 @@ jobs:
 
   video:
     needs: render
+    if: always() && needs.render.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

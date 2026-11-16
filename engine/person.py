@@ -94,7 +94,7 @@ def rot_y(d):
 def limb_dir(pitch, abduct, side):
     """Направление конечности из «вниз»: pitch вперёд (+Y), abduct в сторону (side ±1)."""
     v = Vector((0, 0, -1))
-    v = rot_x(-pitch) @ v.to_4d()
+    v = rot_x(pitch) @ v.to_4d()           # +pitch — вперёд, к лицу (+Y)
     v = rot_y(-abduct * side) @ v
     return Vector(v[:3]).normalized()
 
@@ -246,9 +246,9 @@ def build_mesh(name, p, pose, mats, center=False):
             B.capsule(hp, hp + th * 0.16 * H, lt * 1.6, BOT, r2=lt * 1.45)
         B.capsule(kn, an, lt * 1.1, shin_m, r2=lt * 0.8)
         fm = Vector((0, 1, 0))
-        foot_dir = (rot_x(-(pose["hip"][i] - pose["kn"][i])) @ fm.to_4d()).to_3d()
+        foot_dir = (rot_x(pose["hip"][i] - pose["kn"][i]) @ fm.to_4d()).to_3d()
         B.box(an + foot_dir * 0.07 * k + Vector((0, 0, -0.03 * k)), (0.10 * k, 0.26 * k, 0.08 * k), SHO,
-              m=rot_x(-(pose["hip"][i] - pose["kn"][i])))
+              m=rot_x(pose["hip"][i] - pose["kn"][i]))
     me = B.mesh(name, -hip_z if center else 0.0)
     for m in mats:
         me.materials.append(m)

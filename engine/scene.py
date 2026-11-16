@@ -26,6 +26,7 @@ import sim as S  # noqa: E402
 argv = sys.argv[sys.argv.index("--") + 1:]
 SPEC_PATH, F0, F1, OUT = argv[0], int(argv[1]), int(argv[2]), argv[3]
 PREVIEW = "--preview" in argv
+CHARS = next((a.split("=", 1)[1] for a in argv if a.startswith("--chars=")), None)   # characters.blend (MakeHuman)
 spec = json.load(open(SPEC_PATH, encoding="utf-8"))
 FPS = spec.get("fps", 30)
 RES = spec.get("render", {}).get("res", 1080)
@@ -149,14 +150,32 @@ def build_world():
 
 
 # ---------------------------------------------------------------- толпа
-def build_crowd(sim):
-    p = spec["crowd"]["person"]
-    mats = P.materials("crowd", p)
-    coll = bpy.data.collections.new("CrowdPoses")
+def append_collection(name):
+    with bpy.data.libraries.load(CHARS, link=False) as (src, dst):
+        dst.collections = [name]
+        dst.scenes = [s for s in src.scenes][:1]
+    coll = dst.collections[0]
     sc.collection.children.link(coll)
-    for i, pose in enumerate(P.crowd_poses()):
-        me = P.build_mesh(f"pose{i}", p, pose, mats, center=True)
-        link(bpy.data.objects.new(f"{i}_pose", me), coll)
+    info = json.loads(dst.scenes[0].get("battle_info", "{}")) if dst.scenes else {}
+    if dst.scenes:
+        bpy.data.scenes.remove(dst.scenes[0])
+    return coll, info
+
+
+def build_crowd(sim):
+    global HIP
+    if CHARS and spec["crowd"].get("mh"):
+        coll, info = append_collection("CrowdPoses")
+        HIP = info.get("crowd_hip", 0.95)
+    else:
+        p = spec["crowd"]["person"]
+        mats = P.materials("crowd", p)
+        coll = bpy.data.collections.new("CrowdPoses")
+        sc.collection.children.link(coll)
+        for i, pose in enumerate(P.crowd_poses()):
+            me = P.build_mesh(f"pose{i}", p, pose, mats, center=True)
+            link(bpy.data.objects.new(f"{i}_pose", me), coll)
+        HIP = P.hip_height(p)
     bpy.context.view_layer.layer_collection.children["CrowdPoses"].exclude = True
 
     me = bpy.data.meshes.new("CrowdPts")
@@ -208,13 +227,25 @@ def update_crowd(obj, sim, hip):
 
 # ---------------------------------------------------------------- герой
 HERO_MATS = None
+HIP = 0.95
+
+
+def hero_pose_now(sim):
+    hp = sim.hero_pose()
+    return {"punch": lambda: P.pose_punch(hp["k"], hp["side"]),
+            "walk": lambda: P.pose_walk(hp["t"]),
+            "struggle": lambda: P.pose_struggle(hp["t"])}[hp["kind"]]()
 
 
 def update_hero(obj, sim):
-    hp = sim.hero_pose()
-    pose = {"punch": lambda: P.pose_punch(hp["k"], hp["side"]),
-            "walk": lambda: P.pose_walk(hp["t"]),
-            "struggle": lambda: P.pose_struggle(hp["t"])}[hp["kind"]]()
+    pose = hero_pose_now(sim)
+    if obj.type == "ARMATURE":          # живой герой MakeHuman: только поза скелета
+        import rigpose as RP
+        obj.location = Vector(sim.hero)
+        obj.rotation_euler = (0, 0, math.pi)
+        obj.scale = (spec["hero"].get("scale", 1.0),) * 3
+        RP.apply(obj, pose)
+        return
     old = obj.data
     obj.data = P.build_mesh("hero", spec["hero"]["person"], pose, HERO_MATS)
     bpy.data.meshes.remove(old)
@@ -266,8 +297,12 @@ def place_camera(cam, sim):
 sim = S.Sim(spec)
 build_world()
 crowd = build_crowd(sim)
-HERO_MATS = P.materials("hero", spec["hero"]["person"])
-hero = link(bpy.data.objects.new("Hero", bpy.data.meshes.new("hero0")))
+if CHARS and spec["hero"].get("mh"):
+    append_collection("Hero")
+    hero = bpy.data.objects["HeroRig"]
+else:
+    HERO_MATS = P.materials("hero", spec["hero"]["person"])
+    hero = link(bpy.data.objects.new("Hero", bpy.data.meshes.new("hero0")))
 camd = bpy.data.cameras.new("Cam")
 camd.clip_end = 1500
 cam = link(bpy.data.objects.new("Cam", camd))
@@ -292,7 +327,7 @@ sc.view_settings.exposure = spec.get("exposure", -2.1)
 sc.render.image_settings.file_format = "PNG"
 sc.render.image_settings.compression = 30
 
-hip = P.hip_height(spec["crowd"]["person"])
+hip = HIP
 for f in range(F0, F1 + 1):
     sim.advance_to(f)
     path = os.path.join(OUT, f"{f:05d}.png")

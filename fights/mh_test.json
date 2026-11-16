@@ -1,0 +1,113 @@
+{
+ "id": "mh_test",
+ "duration": 4,
+ "fps": 30,
+ "seed": 7,
+ "title_top": "10,000 CLONES VS",
+ "title_bottom": "ONE BEARDED LEGEND!\nWHO WILL WIN?",
+ "counter": "LEFT",
+ "crowd": {
+  "count": 3000,
+  "front": 6,
+  "charge_at": 0.2,
+  "speed": [
+   4.5,
+   6.8
+  ],
+  "person": {
+   "height": 1.82,
+   "build": "athletic",
+   "skin": "#E8B596",
+   "hair": "short",
+   "hair_color": "#C9A040",
+   "beard": "none",
+   "top": "none",
+   "bottom": "shorts",
+   "bottom_color": "#3A3F8F",
+   "shoes": "#F2F2F2"
+  },
+  "mh": {
+   "phenotype": {
+    "gender": 1,
+    "age": 0.45,
+    "muscle": 0.65,
+    "weight": 0.45,
+    "height": 0.6
+   },
+   "skin": "young_caucasian_male",
+   "hair": "short02",
+   "eyebrows": "eyebrow002",
+   "clothes": [
+    "male_casualsuit03",
+    "shoes01"
+   ],
+   "colors": {
+    "hair": "#D8B060"
+   }
+  }
+ },
+ "hero": {
+  "walk": 1.4,
+  "hit_radius": 1.8,
+  "power": [
+   7,
+   15
+  ],
+  "lift": [
+   6,
+   12
+  ],
+  "person": {
+   "height": 1.78,
+   "build": "muscular",
+   "skin": "#D9A07E",
+   "hair": "short",
+   "hair_color": "#8A4B2A",
+   "beard": "full",
+   "beard_color": "#8A4B2A",
+   "top": "tshirt",
+   "top_color": "#2B2B2B",
+   "bottom": "pants",
+   "bottom_color": "#3B5A8C",
+   "shoes": "#4A3020"
+  },
+  "scale": 1.35,
+  "mh": {
+   "phenotype": {
+    "gender": 1,
+    "age": 0.6,
+    "muscle": 0.85,
+    "weight": 0.55,
+    "height": 0.55
+   },
+   "face": {
+    "chin-width": 0.3,
+    "head-square": 0.4
+   },
+   "skin": "middleage_caucasian_male",
+   "hair": "short04",
+   "eyebrows": "eyebrow005",
+   "clothes": [
+    "male_worksuit01",
+    "shoes04"
+   ]
+  }
+ },
+ "shots": [
+  {
+   "t": 0.0,
+   "type": "behind",
+   "dist": 4,
+   "height": 2.0,
+   "lens": 28
+  },
+  {
+   "t": 2.0,
+   "type": "front",
+   "dist": 4,
+   "height": 2.2,
+   "side": 1.2,
+   "lens": 30
+  }
+ ]
+}
