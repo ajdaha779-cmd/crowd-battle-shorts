@@ -57,14 +57,11 @@
    "beard": "full",
    "beard_color": "#17110D",
    "clothes": [
-    "male_casualsuit02",
+    "male_casualsuit06",
     "shoes01"
    ],
    "colors": {
-    "hair": "#1A1410",
-    "clothes": {
-     "male_casualsuit02": "#C0141E"
-    }
+    "hair": "#1A1410"
    }
   }
  },
@@ -165,8 +162,8 @@
   {
    "t": 5.5,
    "type": "front",
-   "dist": 5,
-   "height": 3.2,
+   "dist": 7,
+   "height": 5.5,
    "side": 1.6,
    "lens": 26
   },
@@ -198,7 +195,7 @@
    "t": 19.0,
    "type": "front",
    "dist": 7,
-   "height": 5,
+   "height": 5.5,
    "side": -2,
    "lens": 24
   },
