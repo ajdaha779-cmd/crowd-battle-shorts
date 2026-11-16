@@ -1,0 +1,7 @@
+.np311/
+output/
+frames/
+out/
+__pycache__/
+*.blend1
+.DS_Store

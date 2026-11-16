@@ -1,0 +1,95 @@
+# Битвы: рендер ролика целиком в облаке.
+# Запуск: python3 make.py fights/<id>.json  (или вручную: Actions → Render → Run workflow)
+name: Render
+on:
+  workflow_dispatch:
+    inputs:
+      fight:
+        description: "id битвы (файл fights/<id>.json)"
+        required: true
+      preview:
+        description: "черновик: низкое разрешение, мало сэмплов"
+        type: boolean
+        default: false
+
+run-name: "${{ inputs.fight }}${{ inputs.preview && ' (черновик)' || '' }}"
+
+env:
+  BLENDER_VER: "4.5.16"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: python3 tools/plan.py "fights/${{ inputs.fight }}.json" >> "$GITHUB_OUTPUT"
+
+  render:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Кэш Blender
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/blender
+          key: blender-${{ env.BLENDER_VER }}-linux-x64
+      - name: Скачать Blender
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/blender
+          curl -sSL "https://download.blender.org/release/Blender${BLENDER_VER%.*}/blender-${BLENDER_VER}-linux-x64.tar.xz" \
+            | tar -xJ -C ~/blender --strip-components=1
+      - name: Библиотеки
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y --no-install-recommends libxi6 libxxf86vm1 libxfixes3 libxrender1 \
+            libxkbcommon0 libsm6 libice6 libgl1 libegl1 > /dev/null
+      - name: Рендер кадров ${{ matrix.a }}–${{ matrix.b }}
+        run: |
+          ~/blender/blender -b -P engine/scene.py -- "fights/${{ inputs.fight }}.json" ${{ matrix.a }} ${{ matrix.b }} frames \
+            ${{ inputs.preview && '--preview' || '' }} 2>&1 | grep -E "FRAME_DONE|CHUNK_DONE|Error|Traceback|File \"" || true
+          n=$(ls frames/*.png 2>/dev/null | wc -l)
+          echo "кадров: $n из $(( ${{ matrix.b }} - ${{ matrix.a }} + 1 ))"
+          test "$n" -eq $(( ${{ matrix.b }} - ${{ matrix.a }} + 1 ))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ matrix.a }}
+          path: frames/*.png
+          retention-days: 1
+          compression-level: 0
+
+  video:
+    needs: render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: frames-*
+          path: frames
+          merge-multiple: true
+      - name: ffmpeg и numpy
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y --no-install-recommends ffmpeg > /dev/null
+          pip install -q numpy
+      - name: Сборка ролика
+        run: |
+          mkdir -p out
+          python3 engine/finalize.py "fights/${{ inputs.fight }}.json" frames "out/${{ inputs.fight }}.mp4"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ inputs.fight }}
+          path: out/${{ inputs.fight }}.mp4
+          retention-days: 14
+          compression-level: 0
