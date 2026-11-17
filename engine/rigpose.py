@@ -56,4 +56,26 @@ def apply(arm, pose):
         _aim(arm, f"calf_{sfx}", _dir(P.limb_dir(hip - kn, lab, s)))
         foot = Vector((0, math.cos(math.radians(hip - kn)), math.sin(math.radians(hip - kn)) - 0.35))
         _aim(arm, f"foot_{sfx}", _dir(foot))
+    if pose.get("fist", True):
+        fist(arm)
     bpy.context.view_layer.update()
+
+
+FIST_SIGN = 1.0
+
+
+def fist(arm, deg=(55, 85, 70)):
+    """Кулаки: сгибаем фаланги вокруг локальной оси X кости."""
+    from mathutils import Quaternion
+    for f in ("index", "middle", "ring", "pinky"):
+        for k, d in zip(("01", "02", "03"), deg):
+            for sfx in ("l", "r"):
+                pb = arm.pose.bones.get(f"{f}_{k}_{sfx}")
+                if pb:
+                    pb.rotation_mode = "QUATERNION"
+                    pb.rotation_quaternion = Quaternion((1, 0, 0), math.radians(d) * FIST_SIGN)
+    for sfx in ("l", "r"):
+        pb = arm.pose.bones.get(f"thumb_02_{sfx}")
+        if pb:
+            pb.rotation_mode = "QUATERNION"
+            pb.rotation_quaternion = Quaternion((1, 0, 0), math.radians(40) * FIST_SIGN)

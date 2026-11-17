@@ -230,7 +230,8 @@ def hero_pose_now(sim):
     hp = sim.hero_pose()
     return {"punch": lambda: P.pose_punch(hp["k"], hp["side"]),
             "walk": lambda: P.pose_walk(hp["t"]),
-            "struggle": lambda: P.pose_struggle(hp["t"])}[hp["kind"]]()
+            "struggle": lambda: P.pose_struggle(hp["t"]),
+            "guard": lambda: P.pose_guard(hp["t"])}[hp["kind"]]()
 
 
 def update_hero(obj, sim):
@@ -282,11 +283,26 @@ def place_camera(cam, sim):
         a = math.radians(s.get("start", -60)) + s.get("speed", 0.3) * local
         loc = H + Vector((math.cos(a) * s.get("radius", 14), math.sin(a) * s.get("radius", 14), s.get("height", 8)))
         look = H + up
+    elif typ == "crowd_line":
+        # проход вдоль первого ряда толпы на уровне лиц (как представление бойцов)
+        fy = spec["crowd"].get("front", 22.0)
+        x = s.get("x0", -12) + (s.get("x1", 12) - s.get("x0", -12)) * k
+        loc = Vector((x, fy - s.get("dist", 2.6), s.get("height", 1.7)))
+        look = Vector((x + s.get("lead", 1.5), fy + 1.0, s.get("look_z", 1.55)))
+    elif typ == "hero_close":
+        # крупный план героя: дуга перед ним, камера на уровне лица
+        sc_h = spec["hero"].get("scale", 1.0)
+        a = math.radians(s.get("a0", -35) + (s.get("a1", 35) - s.get("a0", -35)) * k)
+        d = s.get("dist", 2.4) * sc_h
+        loc = H + Vector((math.sin(a) * d, math.cos(a) * d, s.get("height", 1.65) * sc_h))
+        look = H + Vector((0, 0, s.get("look_z", 1.55) * sc_h))
     elif typ == "top":
         loc = H + Vector((0, -s.get("back", 15), s.get("height", 40)))
         look = H
     else:
         raise ValueError(typ)
+    ground = sim.height(__import__("numpy").array([[loc.x, loc.y]]))[0]
+    loc.z = max(loc.z, ground + s.get("clear", 2.2))       # камера не ныряет в гору тел
     cam.location = loc
     d = look - loc
     cam.rotation_euler = d.to_track_quat("-Z", "Y").to_euler()

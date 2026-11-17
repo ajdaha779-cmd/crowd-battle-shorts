@@ -76,6 +76,13 @@ def pose_walk(t):
                 kn=(10 + 25 * max(0, -s), 10 + 25 * max(0, s)), lab=(3, 3), lean=4, twist=0)
 
 
+def pose_guard(t):
+    """Боевая стойка: кулаки у лица, лёгкое покачивание."""
+    s = math.sin(t * 2 * math.pi * 0.8)
+    return dict(sh=(42 + 4 * s, 38 - 4 * s), el=(95, 100), ab=(22, 22), hip=(12, -8), kn=(18, 12),
+                lab=(10, 10), lean=6 + 2 * s, twist=-10)
+
+
 def pose_struggle(t):
     s = math.sin(t * 9)
     return dict(sh=(120 + 30 * s, 120 - 30 * s), el=(40, 40), ab=(40, 40), hip=(30, -20), kn=(60, 40),

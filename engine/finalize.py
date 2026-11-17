@@ -144,6 +144,7 @@ WrapStyle: 2
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Top,Montserrat Black,{spec.get("title_size", 96)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,1,0,0,100,100,0,0,1,0,0,2,30,30,{H - VIDEO_Y + 40},1
 Style: Bottom,Montserrat Black,{spec.get("title_size", 96)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,1,0,0,100,100,0,0,1,0,0,8,30,30,{VIDEO_Y + 1080 + 40},1
+Style: Label,Montserrat Black,88,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,1,0,0,100,100,0,0,1,7,3,2,30,30,{H - VIDEO_Y - 1080 + 60},1
 Style: Count,Montserrat Black,64,&H003DD8FF,&H003DD8FF,&H00000000,&H64000000,0,1,0,0,100,100,0,0,1,6,2,8,30,30,{VIDEO_Y + 30},1
 
 [Events]
@@ -151,6 +152,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     ev = [f"Dialogue: 1,{ass_t(0)},{ass_t(T)},Top,,0,0,0,,{top}",
           f"Dialogue: 1,{ass_t(0)},{ass_t(T)},Bottom,,0,0,0,,{bottom}"]
+    shots = spec["shots"]
+    for i, sh in enumerate(shots):          # подписи представлений: «RAVSHAN ×15,000», «LITVIN»
+        if sh.get("label"):
+            a = sh["t"] + 0.15
+            b = shots[i + 1]["t"] if i + 1 < len(shots) else T
+            txt = sh["label"].replace("\n", r"\N")
+            ev.append(f"Dialogue: 3,{ass_t(a)},{ass_t(b)},Label,,0,0,0,,"
+                      + r"{\fad(120,120)\fscx118\fscy118\t(0,160,\fscx100\fscy100)}" + txt)
     label = spec.get("counter")
     if label:
         step = 3

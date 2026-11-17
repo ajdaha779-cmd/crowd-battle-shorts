@@ -61,6 +61,7 @@ class Sim:
         self.lift = he.get("lift", [5.0, 11.0])
         self.loses_at = he.get("loses_at")
         self.stop_at = he.get("stop_walk_at")
+        self.walk_at = he.get("walk_at", cr.get("charge_at", 1.0))   # до атаки герой стоит в стойке
         k = int(2 * HALF / CELL)
         self.hm = np.zeros((k, k))
         self.t = 0.0
@@ -93,7 +94,7 @@ class Sim:
         dt, t = self.dt, self.t
         m = self.mode
         # герой идёт в толпу и поднимается по горе
-        if self.stop_at is None or t < self.stop_at:
+        if t >= self.walk_at and (self.stop_at is None or t < self.stop_at):
             self.hero[1] += self.hero_walk * dt
         hz = self.height(self.hero[None, :2])[0]
         self.hero[2] += (hz - self.hero[2]) * min(1, dt * 6)
@@ -191,6 +192,8 @@ class Sim:
             return {"kind": "punch", "k": k, "side": self.punch_side}
         if not self.hero_active():
             return {"kind": "struggle", "t": self.t}
+        if self.t < self.walk_at:
+            return {"kind": "guard", "t": self.t}
         return {"kind": "walk", "t": self.t * self.hero_walk / 1.2}
 
 
